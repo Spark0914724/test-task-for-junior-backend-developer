@@ -90,6 +90,50 @@ func (s *Service) List(ctx context.Context) ([]taskdomain.Task, error) {
 	return s.repo.List(ctx)
 }
 
+func (s *Service) CreateRecurring(ctx context.Context, input RecurringCreateInput) ([]taskdomain.Task, error) {
+	normalized, err := validateCreateInput(CreateInput{
+		Title:       input.Title,
+		Description: input.Description,
+		Status:      input.Status,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	input.Recurrence.StartDate = input.StartDate
+	input.Recurrence.EndDate = input.EndDate
+
+	if err := input.Recurrence.Validate(); err != nil {
+		return nil, fmt.Errorf("%w: %s", ErrInvalidInput, err.Error())
+	}
+
+	dates := input.Recurrence.Dates()
+	if len(dates) == 0 {
+		return nil, fmt.Errorf("%w: no dates generated for the given recurrence rule and range", ErrInvalidInput)
+	}
+
+	rec, err := s.repo.CreateRecurrence(ctx, &input.Recurrence)
+	if err != nil {
+		return nil, err
+	}
+
+	now := s.now()
+	tasks := make([]*taskdomain.Task, 0, len(dates))
+	for _, d := range dates {
+		tasks = append(tasks, &taskdomain.Task{
+			Title:          normalized.Title,
+			Description:    normalized.Description,
+			Status:         normalized.Status,
+			RecurrenceID:   &rec.ID,
+			ScheduledDate:  &d,
+			CreatedAt:      now,
+			UpdatedAt:      now,
+		})
+	}
+
+	return s.repo.BulkCreateTasks(ctx, tasks)
+}
+
 func validateCreateInput(input CreateInput) (CreateInput, error) {
 	input.Title = strings.TrimSpace(input.Title)
 	input.Description = strings.TrimSpace(input.Description)

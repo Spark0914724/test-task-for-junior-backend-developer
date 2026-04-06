@@ -36,7 +36,7 @@ func (r *Recurrence) Validate() error {
 	switch r.Type {
 	case RecurrenceDaily:
 		if r.EveryNDays <= 0 {
-			return fmt.Errorf("%w: every_n_days must be positive for daily recurrence", ErrNotFound)
+			return fmt.Errorf("every_n_days must be positive for daily recurrence")
 		}
 	case RecurrenceMonthlyDays:
 		if len(r.MonthDays) == 0 {
