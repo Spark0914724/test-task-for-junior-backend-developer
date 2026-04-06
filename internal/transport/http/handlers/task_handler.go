@@ -119,7 +119,7 @@ func (h *TaskHandler) CreateRecurring(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tasks, err := h.usecase.CreateRecurring(r.Context(), taskusecase.RecurringCreateInput{
+	input := taskusecase.RecurringCreateInput{
 		Title:       req.Title,
 		Description: req.Description,
 		Status:      req.Status,
@@ -132,18 +132,20 @@ func (h *TaskHandler) CreateRecurring(w http.ResponseWriter, r *http.Request) {
 			SpecificDates: req.Recurrence.SpecificDates,
 			Parity:        req.Recurrence.Parity,
 		},
-	})
+	}
+
+	tasks, err := h.usecase.CreateRecurring(r.Context(), input)
 	if err != nil {
 		writeUsecaseError(w, err)
 		return
 	}
 
-	response := make([]taskDTO, 0, len(tasks))
+	resp := make([]taskDTO, 0, len(tasks))
 	for i := range tasks {
-		response = append(response, newTaskDTO(&tasks[i]))
+		resp = append(resp, newTaskDTO(&tasks[i]))
 	}
 
-	writeJSON(w, http.StatusCreated, response)
+	writeJSON(w, http.StatusCreated, resp)
 }
 
 func getIDFromRequest(r *http.Request) (int64, error) {

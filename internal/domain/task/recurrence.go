@@ -36,20 +36,20 @@ func (r *Recurrence) Validate() error {
 	switch r.Type {
 	case RecurrenceDaily:
 		if r.EveryNDays <= 0 {
-			return fmt.Errorf("every_n_days must be positive for daily recurrence")
+			return fmt.Errorf("every_n_days must be positive")
 		}
 	case RecurrenceMonthlyDays:
 		if len(r.MonthDays) == 0 {
-			return fmt.Errorf("month_days is required for monthly_days recurrence")
+			return fmt.Errorf("month_days can't be empty")
 		}
 		for _, d := range r.MonthDays {
 			if d < 1 || d > 30 {
-				return fmt.Errorf("month_days values must be between 1 and 30")
+				return fmt.Errorf("month day %d is out of range (1-30)", d)
 			}
 		}
 	case RecurrenceSpecificDates:
 		if len(r.SpecificDates) == 0 {
-			return fmt.Errorf("specific_dates is required for specific_dates recurrence")
+			return fmt.Errorf("specific_dates can't be empty")
 		}
 	case RecurrenceParity:
 		if r.Parity != ParityEven && r.Parity != ParityOdd {
@@ -59,6 +59,7 @@ func (r *Recurrence) Validate() error {
 		return fmt.Errorf("unknown recurrence type: %s", r.Type)
 	}
 
+	// specific_dates doesn't need a range
 	if r.Type != RecurrenceSpecificDates {
 		if r.StartDate.IsZero() || r.EndDate.IsZero() {
 			return fmt.Errorf("start_date and end_date are required")
@@ -71,7 +72,6 @@ func (r *Recurrence) Validate() error {
 	return nil
 }
 
-// Dates returns all dates matching the recurrence rule.
 func (r *Recurrence) Dates() []time.Time {
 	switch r.Type {
 	case RecurrenceDaily:
@@ -79,12 +79,11 @@ func (r *Recurrence) Dates() []time.Time {
 	case RecurrenceMonthlyDays:
 		return r.monthlyDaysDates()
 	case RecurrenceSpecificDates:
-		return r.specificDates()
+		return r.SpecificDates
 	case RecurrenceParity:
 		return r.parityDates()
-	default:
-		return nil
 	}
+	return nil
 }
 
 func (r *Recurrence) dailyDates() []time.Time {
@@ -97,46 +96,37 @@ func (r *Recurrence) dailyDates() []time.Time {
 
 func (r *Recurrence) monthlyDaysDates() []time.Time {
 	var dates []time.Time
-	// iterate month by month
-	start := firstOfMonth(r.StartDate)
-	end := firstOfMonth(r.EndDate)
-	for m := start; !m.After(end); m = m.AddDate(0, 1, 0) {
+
+	// go month by month from start to end
+	cur := time.Date(r.StartDate.Year(), r.StartDate.Month(), 1, 0, 0, 0, 0, time.UTC)
+	endMonth := time.Date(r.EndDate.Year(), r.EndDate.Month(), 1, 0, 0, 0, 0, time.UTC)
+
+	for !cur.After(endMonth) {
 		for _, day := range r.MonthDays {
-			candidate := time.Date(m.Year(), m.Month(), day, 0, 0, 0, 0, time.UTC)
-			// skip if the month doesn't have this day (e.g. day=30 in February)
-			if candidate.Month() != m.Month() {
+			candidate := time.Date(cur.Year(), cur.Month(), day, 0, 0, 0, 0, time.UTC)
+			// skip if day doesn't exist in this month (e.g. Feb 30)
+			if candidate.Month() != cur.Month() {
 				continue
 			}
-			if (candidate.Equal(r.StartDate) || candidate.After(r.StartDate)) &&
-				(candidate.Equal(r.EndDate) || candidate.Before(r.EndDate)) {
+			if !candidate.Before(r.StartDate) && !candidate.After(r.EndDate) {
 				dates = append(dates, candidate)
 			}
 		}
+		cur = cur.AddDate(0, 1, 0)
 	}
-	return dates
-}
 
-func (r *Recurrence) specificDates() []time.Time {
-	var dates []time.Time
-	for _, d := range r.SpecificDates {
-		dates = append(dates, d)
-	}
 	return dates
 }
 
 func (r *Recurrence) parityDates() []time.Time {
 	var dates []time.Time
 	for d := r.StartDate; !d.After(r.EndDate); d = d.AddDate(0, 0, 1) {
-		day := d.Day()
-		if r.Parity == ParityEven && day%2 == 0 {
+		isEven := d.Day()%2 == 0
+		if r.Parity == ParityEven && isEven {
 			dates = append(dates, d)
-		} else if r.Parity == ParityOdd && day%2 != 0 {
+		} else if r.Parity == ParityOdd && !isEven {
 			dates = append(dates, d)
 		}
 	}
 	return dates
-}
-
-func firstOfMonth(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
 }
