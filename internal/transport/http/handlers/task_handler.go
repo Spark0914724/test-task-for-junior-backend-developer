@@ -112,6 +112,40 @@ func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
+func (h *TaskHandler) CreateRecurring(w http.ResponseWriter, r *http.Request) {
+	var req recurringTaskMutationDTO
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	tasks, err := h.usecase.CreateRecurring(r.Context(), taskusecase.RecurringCreateInput{
+		Title:       req.Title,
+		Description: req.Description,
+		Status:      req.Status,
+		StartDate:   req.StartDate,
+		EndDate:     req.EndDate,
+		Recurrence: taskdomain.Recurrence{
+			Type:          req.Recurrence.Type,
+			EveryNDays:    req.Recurrence.EveryNDays,
+			MonthDays:     req.Recurrence.MonthDays,
+			SpecificDates: req.Recurrence.SpecificDates,
+			Parity:        req.Recurrence.Parity,
+		},
+	})
+	if err != nil {
+		writeUsecaseError(w, err)
+		return
+	}
+
+	response := make([]taskDTO, 0, len(tasks))
+	for i := range tasks {
+		response = append(response, newTaskDTO(&tasks[i]))
+	}
+
+	writeJSON(w, http.StatusCreated, response)
+}
+
 func getIDFromRequest(r *http.Request) (int64, error) {
 	rawID := mux.Vars(r)["id"]
 	if rawID == "" {
